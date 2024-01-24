@@ -5,6 +5,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import br.com.gitscraping.javagitscraping.classes.GitInfo;
 
 import java.io.BufferedReader;
@@ -28,8 +32,26 @@ public class GitScrapingController {
     @GetMapping("/git-info")
 	public ResponseEntity get(String rep) {
 		try {
-			String git = "https://github.com/" + rep;
-			URL url = new URI(git).toURL();
+			String git = "https://github.com/" + rep + "/tree/master";
+
+			JsonObject jsonObject = getHTMLContent(git);
+
+			getFiles(jsonObject);
+			
+
+			
+
+			// System.out.println(itemObject);
+			return ResponseEntity.ok("teste");
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+
+	private JsonObject getHTMLContent(String rep) throws Exception{
+		URL url = new URI(rep).toURL();
 			HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
 			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
@@ -41,24 +63,67 @@ public class GitScrapingController {
             }
             in.close();
 
-			String regex = "<tbody>(.*?)</tbody>";
+			String regex = "<react-partial\\s+partial-name=\"repos-overview\"[^>]*>(.*?)</react-partial>";
 			Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
 			Matcher matcher = pattern.matcher(response);
+			String firstContent = "";
 			if (matcher.find()) {
 				// Obtém o conteúdo entre <tbody> e </tbody>
-				String conteudoTbody = matcher.group(1);
+				firstContent = matcher.group(1);
 	
-				// Imprime o conteúdo
-				System.out.println("Conteúdo entre <tbody> e </tbody>: " + conteudoTbody);
 			} else {
-				System.out.println("Nenhuma correspondência encontrada.");
+				throw new Exception("The HTML content could not be retrieved.");
 			}
+
+			regex = "<script[^>]*>(.*?)</script>";
+			pattern = Pattern.compile(regex, Pattern.DOTALL);
+			matcher = pattern.matcher(firstContent);
+			String scriptContent = "";
+			JsonObject jsonObject = new JsonObject();
+
+			if(matcher.find()){
+				scriptContent = matcher.group(1);
+			}else{
+				throw new Exception("The HTML content could not be retrieved.");
+			}
+
+			try {
+				jsonObject = JsonParser.parseString(scriptContent).getAsJsonObject();
+
+				
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+			return jsonObject;
+	}
+
+	private String getFiles(JsonObject jsonObject) throws Exception{
+		JsonObject treeObject = jsonObject.getAsJsonObject("props")
+                                               .getAsJsonObject("initialPayload")
+                                               .getAsJsonObject("tree");
 			
-			return ResponseEntity.ok(response);
-		} catch (Exception ex) {
-			ex.printStackTrace();
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-		}
+			if (treeObject.isJsonObject() && treeObject.has("items")) {
+                // Acessa o array 'items'
+                JsonArray itemsArray = treeObject.getAsJsonArray("items");
+
+                // Itera sobre os elementos do array
+                for (int i = 0; i < itemsArray.size(); i++) {
+                    // Acessa cada item do array como JsonObject
+					if(itemsArray.get(i)
+								.getAsJsonObject()
+								.get("contentType")
+								.getAsString()
+								.equalsIgnoreCase("directory")){
+
+						System.out.println(itemsArray.get(i).getAsJsonObject().get("contentType").getAsString());
+
+					}
+                }
+            } else {
+				throw new Exception("The HTML content could not be retrieved.");
+            }
+			return null;
+
 	}
 
 	@GetMapping("/teste")
