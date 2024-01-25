@@ -12,9 +12,11 @@ import com.google.gson.JsonParser;
 import br.com.gitscraping.javagitscraping.classes.GitInfo;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 
 import java.util.ArrayList;
@@ -32,11 +34,13 @@ public class GitScrapingController {
     @GetMapping("/git-info")
 	public ResponseEntity get(String rep) {
 		try {
-			String git = "https://github.com/" + rep + "/tree/master";
+			String git = "https://github.com/" + rep + "tree/master/";
 
-			JsonObject jsonObject = getHTMLContent(git);
+			StringBuilder response = getHTMLResponse(git);
 
-			getFiles(jsonObject);
+			JsonObject jsonObject = getHTMLContent(response);
+
+			getFiles(jsonObject, git, "directory");
 			
 
 			
@@ -50,55 +54,60 @@ public class GitScrapingController {
 	}
 
 
-	private JsonObject getHTMLContent(String rep) throws Exception{
+	private StringBuilder getHTMLResponse(String rep) throws IOException, URISyntaxException{
 		URL url = new URI(rep).toURL();
-			HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
-			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-            String inputLine;
-            StringBuilder response = new StringBuilder();
+		BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+		String inputLine;
+		StringBuilder response = new StringBuilder();
 
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
-            }
-            in.close();
+		while ((inputLine = in.readLine()) != null) {
+			response.append(inputLine);
+		}
+		in.close();
 
-			String regex = "<react-partial\\s+partial-name=\"repos-overview\"[^>]*>(.*?)</react-partial>";
-			Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
-			Matcher matcher = pattern.matcher(response);
-			String firstContent = "";
-			if (matcher.find()) {
-				// Obtém o conteúdo entre <tbody> e </tbody>
-				firstContent = matcher.group(1);
-	
-			} else {
-				throw new Exception("The HTML content could not be retrieved.");
-			}
-
-			regex = "<script[^>]*>(.*?)</script>";
-			pattern = Pattern.compile(regex, Pattern.DOTALL);
-			matcher = pattern.matcher(firstContent);
-			String scriptContent = "";
-			JsonObject jsonObject = new JsonObject();
-
-			if(matcher.find()){
-				scriptContent = matcher.group(1);
-			}else{
-				throw new Exception("The HTML content could not be retrieved.");
-			}
-
-			try {
-				jsonObject = JsonParser.parseString(scriptContent).getAsJsonObject();
-
-				
-			} catch (Exception ex) {
-				ex.printStackTrace();
-			}
-			return jsonObject;
+		return response;
 	}
 
-	private String getFiles(JsonObject jsonObject) throws Exception{
-		JsonObject treeObject = jsonObject.getAsJsonObject("props")
+	private JsonObject getHTMLContent(StringBuilder response) throws Exception{
+		
+		String regex = "<react-partial\\s+partial-name=\"repos-overview\"[^>]*>(.*?)</react-partial>";
+		Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
+		Matcher matcher = pattern.matcher(response);
+		String firstContent = "";
+		if (matcher.find()) {
+			firstContent = matcher.group(1);
+
+		} else {
+			throw new Exception("The HTML content could not be retrieved.");
+		}
+
+		regex = "<script[^>]*>(.*?)</script>";
+		pattern = Pattern.compile(regex, Pattern.DOTALL);
+		matcher = pattern.matcher(firstContent);
+		String scriptContent = "";
+		JsonObject jsonObject = new JsonObject();
+
+		if(matcher.find()){
+			scriptContent = matcher.group(1);
+		}else{
+			throw new Exception("The HTML content could not be retrieved.");
+		}
+
+		try {
+			jsonObject = JsonParser.parseString(scriptContent).getAsJsonObject();
+
+			
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return jsonObject;
+	}
+
+	private String getFiles(JsonObject jsonObject, String git, String type) throws Exception{
+		if(jsonObject.isJsonObject() && jsonObject.has("props")){
+			JsonObject treeObject = jsonObject.getAsJsonObject("props")
                                                .getAsJsonObject("initialPayload")
                                                .getAsJsonObject("tree");
 			
@@ -115,14 +124,71 @@ public class GitScrapingController {
 								.getAsString()
 								.equalsIgnoreCase("directory")){
 
-						System.out.println(itemsArray.get(i).getAsJsonObject().get("contentType").getAsString());
+						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						path = git + path;
+						StringBuilder response = getHTMLResponse(path);
+						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+						getFiles(jsonResponse, git, "directory");
+						// System.out.println(path);
+						// System.out.println(itemsArray.get(i).getAsJsonObject().get("contentType").getAsString());
 
+					}else{
+						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						path = git + path;
+						StringBuilder response = getHTMLResponse(path);
+						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+						getFiles(jsonResponse, git, "file");
+						// System.out.println(path);
+						// System.out.println(jsonResponse);
 					}
                 }
             } else {
 				throw new Exception("The HTML content could not be retrieved.");
             }
-			return null;
+		}else if(jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("directory")){
+			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
+                                               .getAsJsonObject("tree");
+			
+			if (treeObject.isJsonObject() && treeObject.has("items")) {
+				// Acessa o array 'items'
+				JsonArray itemsArray = treeObject.getAsJsonArray("items");
+
+				// Itera sobre os elementos do array
+				for (int i = 0; i < itemsArray.size(); i++) {
+					// Acessa cada item do array como JsonObject
+					if(itemsArray.get(i)
+								.getAsJsonObject()
+								.get("contentType")
+								.getAsString()
+								.equalsIgnoreCase("directory")){
+						
+						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						path = git + path;
+						StringBuilder response = getHTMLResponse(path);
+						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+						getFiles(jsonResponse, git, "directory");
+
+						// String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						// System.out.println(path);
+						// System.out.println(itemsArray.get(i).getAsJsonObject().get("name").getAsString());
+
+					}else{
+						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						path = git + path;
+						StringBuilder response = getHTMLResponse(path);
+						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+						getFiles(jsonResponse, git, "file");
+					}
+				}
+			}
+		}else if(jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("file")){
+			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
+                                               .getAsJsonObject("blob")
+											   .getAsJsonObject("headerInfo");
+			
+			System.out.println(treeObject);
+		}
+		return null;
 
 	}
 
