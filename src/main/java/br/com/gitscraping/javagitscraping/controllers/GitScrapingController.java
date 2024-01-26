@@ -31,17 +31,27 @@ import org.springframework.web.bind.annotation.RequestParam;
  */
 @RestController
 public class GitScrapingController {
+
+	private List<GitInfo> gitInfos = new ArrayList<>();
+
     @GetMapping("/git-info")
 	public ResponseEntity get(String rep) {
 		try {
-			String git = "https://github.com/" + rep + "tree/master/";
+			String git = "https://github.com/" + rep + "/tree/master/";
 
 			StringBuilder response = getHTMLResponse(git);
 
 			JsonObject jsonObject = getHTMLContent(response);
 
-			getFiles(jsonObject, git, "directory");
-			
+			getFiles(jsonObject, git, "directory", null);
+
+			for(int i = 0; i < gitInfos.size() -1; i++){
+				System.out.println(gitInfos.get(i).getBytes());
+				System.out.println(gitInfos.get(i).getCount());
+				System.out.println(gitInfos.get(i).getExtension());
+				System.out.println(gitInfos.get(i).getLines());
+				System.out.println('\n');
+			}
 
 			
 
@@ -105,7 +115,7 @@ public class GitScrapingController {
 		return jsonObject;
 	}
 
-	private String getFiles(JsonObject jsonObject, String git, String type) throws Exception{
+	private String getFiles(JsonObject jsonObject, String git, String type, String fileExtension) throws Exception{
 		if(jsonObject.isJsonObject() && jsonObject.has("props")){
 			JsonObject treeObject = jsonObject.getAsJsonObject("props")
                                                .getAsJsonObject("initialPayload")
@@ -124,20 +134,20 @@ public class GitScrapingController {
 								.getAsString()
 								.equalsIgnoreCase("directory")){
 
-						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						path = git + path;
+						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						String path = git + fileName;
 						StringBuilder response = getHTMLResponse(path);
 						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "directory");
+						getFiles(jsonResponse, git, "directory", null);
 						// System.out.println(path);
 						// System.out.println(itemsArray.get(i).getAsJsonObject().get("contentType").getAsString());
 
 					}else{
-						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						path = git + path;
+						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						String path = git + fileName;
 						StringBuilder response = getHTMLResponse(path);
 						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "file");
+						getFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1));
 						// System.out.println(path);
 						// System.out.println(jsonResponse);
 					}
@@ -162,22 +172,22 @@ public class GitScrapingController {
 								.getAsString()
 								.equalsIgnoreCase("directory")){
 						
-						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						path = git + path;
+						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						String path = git + fileName;
 						StringBuilder response = getHTMLResponse(path);
 						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "directory");
+						getFiles(jsonResponse, git, "directory", null);
 
 						// String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
 						// System.out.println(path);
 						// System.out.println(itemsArray.get(i).getAsJsonObject().get("name").getAsString());
 
 					}else{
-						String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						path = git + path;
+						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+						String path = git + fileName;
 						StringBuilder response = getHTMLResponse(path);
 						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "file");
+						getFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1));
 					}
 				}
 			}
@@ -185,32 +195,41 @@ public class GitScrapingController {
 			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
                                                .getAsJsonObject("blob")
 											   .getAsJsonObject("headerInfo");
-			
-			System.out.println(treeObject);
+			int lines = 0;
+			if(!(treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").isJsonNull())){
+				lines = treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").getAsInt();
+			}
+			String size = treeObject.get("blobSize").getAsString();
+			int bytes;
+			if(size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("kb")){
+				size = size.substring(0, size.lastIndexOf(' '));
+				bytes = Math.round(Float.parseFloat(size) * 1024);
+			}else if(size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("gb")){
+				size = size.substring(0, size.lastIndexOf(' '));
+				bytes = Math.round(Float.parseFloat(size) * (1024*1024*1024));
+			}else{
+				size = size.substring(0, size.lastIndexOf(' '));
+				bytes = Integer.parseInt(size);
+			}
+			GitInfo gitInfo = new GitInfo(fileExtension, 1, lines, bytes);
+			gitInfos.add(gitInfo);
 		}
+		
 		return null;
 
 	}
 
 	@GetMapping("/teste")
 	public ResponseEntity teste() {
-		String inputText = "o padre roeu a roupa do rei e roeu o sapato também";
+		String minhaString = "681 Bytes";
 
-      	// Define a expressão regular para encontrar o texto entre 'roeu' e 'roeu'
-      	String regex = "<tbody>\\s(.*?)\\s</tbody>";
+        // Encontrando a posição do último ponto
 
-      	// Compila a expressão regular em um padrão
-      	Pattern pattern = Pattern.compile(regex);
+		String resultado = minhaString.substring(0, minhaString.lastIndexOf(' '));
+        // Verificando se o ponto foi encontrado
 
-      	// Cria um objeto Matcher para a entrada
-      	Matcher matcher = pattern.matcher(inputText);
-
-      	// Enquanto houver correspondências na entrada
-      	while (matcher.find()) {
-      	    // Imprime o texto encontrado entre 'roeu' e 'roeu'
-      	    System.out.println("Texto encontrado: " + matcher.group(1));
-      	}
-		return ResponseEntity.ok("foi");
+        System.out.println("Resultado: " + resultado);
+		return null;
 
 	}
 	
