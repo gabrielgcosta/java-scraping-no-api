@@ -40,7 +40,6 @@ public class GitScrapingController {
 	public ResponseEntity<?> get(String rep) {
 		try {
 
-			System.out.println(rep.substring(rep.lastIndexOf('/') + 1));
 			Object cacheResult = cache.getIfPresent(rep.substring(rep.lastIndexOf('/') + 1));
 
 			if (cacheResult != null) {
@@ -50,9 +49,8 @@ public class GitScrapingController {
 				String git = "https://github.com/" + rep + "/tree/master/";
 				StringBuilder response = getHTMLResponse(git);
 				JsonObject jsonObject = getHTMLContent(response);
-				getFiles(jsonObject, git, "directory", null, gitInfos);
+				getInfoFiles(jsonObject, git, "directory", null, gitInfos);
 
-				System.out.println(rep.substring(rep.lastIndexOf('/') + 1));
 				cache.put(rep.substring(rep.lastIndexOf('/') + 1), gitInfos);
 				
 				return ResponseEntity.ok(gitInfos);
@@ -116,87 +114,61 @@ public class GitScrapingController {
 		return jsonObject;
 	}
 
-	private String getFiles(JsonObject jsonObject, String git, String type, String fileExtension, List<GitInfo> gitInfos) throws Exception {
+	private void getInfoFiles(JsonObject jsonObject, String git, String type, String fileExtension, List<GitInfo> gitInfos) throws Exception {
 		if (jsonObject.isJsonObject() && jsonObject.has("props")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("props")
 					.getAsJsonObject("initialPayload")
 					.getAsJsonObject("tree");
-
-			if (treeObject.isJsonObject() && treeObject.has("items")) {
-				// Acessa o array 'items'
-				JsonArray itemsArray = treeObject.getAsJsonArray("items");
-
-				// Itera sobre os elementos do array
-				for (int i = 0; i < itemsArray.size(); i++) {
-					// Acessa cada item do array como JsonObject
-					if (itemsArray.get(i)
-							.getAsJsonObject()
-							.get("contentType")
-							.getAsString()
-							.equalsIgnoreCase("directory")) {
-
-						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						String path = git + fileName;
-						StringBuilder response = getHTMLResponse(path);
-						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "directory", null, gitInfos);
-						// System.out.println(path);
-						// System.out.println(itemsArray.get(i).getAsJsonObject().get("contentType").getAsString());
-
-					} else {
-						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						String path = git + fileName;
-						StringBuilder response = getHTMLResponse(path);
-						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1), gitInfos);
-						// System.out.println(path);
-						// System.out.println(jsonResponse);
-					}
-				}
-			} else {
-				throw new Exception("The HTML content could not be retrieved.");
-			}
+			accessFiles(treeObject, git, gitInfos);
 		} else if (jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("directory")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
 					.getAsJsonObject("tree");
-
-			if (treeObject.isJsonObject() && treeObject.has("items")) {
-				// Acessa o array 'items'
-				JsonArray itemsArray = treeObject.getAsJsonArray("items");
-
-				// Itera sobre os elementos do array
-				for (int i = 0; i < itemsArray.size(); i++) {
-					// Acessa cada item do array como JsonObject
-					if (itemsArray.get(i)
-							.getAsJsonObject()
-							.get("contentType")
-							.getAsString()
-							.equalsIgnoreCase("directory")) {
-
-						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						String path = git + fileName;
-						StringBuilder response = getHTMLResponse(path);
-						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "directory", null, gitInfos);
-
-						// String path = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						// System.out.println(path);
-						// System.out.println(itemsArray.get(i).getAsJsonObject().get("name").getAsString());
-
-					} else {
-						String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
-						String path = git + fileName;
-						StringBuilder response = getHTMLResponse(path);
-						JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-						getFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1), gitInfos);
-					}
-				}
-			}
+			
+			accessFiles(treeObject, git, gitInfos);
 		} else if (jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("file")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
 					.getAsJsonObject("blob")
 					.getAsJsonObject("headerInfo");
-			int lines = 0;
+			
+			buildGetInfos( treeObject, fileExtension, gitInfos);	
+		}
+	}
+
+	private void accessFiles(JsonObject treeObject, String git, List<GitInfo> gitInfos) throws Exception{
+		if (treeObject.isJsonObject() && treeObject.has("items")) {
+			// accessa o array 'items'
+			JsonArray itemsArray = treeObject.getAsJsonArray("items");
+
+			// Itera sobre os elementos do array
+			for (int i = 0; i < itemsArray.size(); i++) {
+				// accessa cada item do array como JsonObject
+				if (itemsArray.get(i)
+						.getAsJsonObject()
+						.get("contentType")
+						.getAsString()
+						.equalsIgnoreCase("directory")) {
+
+					String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+					String path = git + fileName;
+					StringBuilder response = getHTMLResponse(path);
+					JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+					getInfoFiles(jsonResponse, git, "directory", null, gitInfos);
+
+				} else {
+					String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+					String path = git + fileName;
+					StringBuilder response = getHTMLResponse(path);
+					JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+					getInfoFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1), gitInfos);
+				}
+			}
+		} else {
+			throw new Exception("The HTML content could not be retrieved.");
+		}
+	}
+
+	private void buildGetInfos(JsonObject treeObject, String fileExtension, List<GitInfo> gitInfos){
+		int lines = 0;
 			if (!(treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").isJsonNull())) {
 				lines = treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").getAsInt();
 			}
@@ -229,24 +201,6 @@ public class GitScrapingController {
 				GitInfo newGitInfo = new GitInfo(fileExtension, 1, lines, bytes);
 				gitInfos.add(newGitInfo);
 			}
-		}
-
-		return null;
 
 	}
-
-	@GetMapping("/teste")
-	public ResponseEntity teste() {
-		String minhaString = "681 Bytes";
-
-		// Encontrando a posição do último ponto
-
-		String resultado = minhaString.substring(0, minhaString.lastIndexOf(' '));
-		// Verificando se o ponto foi encontrado
-
-		System.out.println("Resultado: " + resultado);
-		return null;
-
-	}
-
 }
