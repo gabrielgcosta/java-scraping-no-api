@@ -31,8 +31,9 @@ import java.util.concurrent.TimeUnit;
 @RestController
 public class GitScrapingController {
 
+	// Creating cache with max size of 10000 itens and expiration time of 10 minutes
 	private static final Cache<String, Object> cache = Caffeine.newBuilder()
-			.maximumSize(1000)
+			.maximumSize(10000)
 			.expireAfterWrite(10, TimeUnit.MINUTES)
 			.build();
 
@@ -40,24 +41,29 @@ public class GitScrapingController {
 	public ResponseEntity<?> get(String rep) {
 		try {
 
+			// Trying to get the cached response using the name of the rep as key
 			Object cacheResult = cache.getIfPresent(rep.substring(rep.lastIndexOf('/') + 1));
 
+			// If the cache result was found, just return it
 			if (cacheResult != null) {
 				return ResponseEntity.ok(cacheResult);
 			} else {
+				// Create a new gitInfos list
 				List<GitInfo> gitInfos = new ArrayList<>();
+				// Build the git URL
 				String git = "https://github.com/" + rep + "/tree/master/";
+				// Get the HTML from the page
 				StringBuilder response = getHTMLResponse(git);
+				// Fetch the needed content
 				JsonObject jsonObject = getHTMLContent(response);
+				// Get the information of the files
 				getInfoFiles(jsonObject, git, "directory", null, gitInfos);
 
+				// Put the result into the cache, using the name of the rep as key
 				cache.put(rep.substring(rep.lastIndexOf('/') + 1), gitInfos);
-				
+
 				return ResponseEntity.ok(gitInfos);
 			}
-
-
-			
 		} catch (Exception ex) {
 			ex.printStackTrace();
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -65,9 +71,11 @@ public class GitScrapingController {
 	}
 
 	private StringBuilder getHTMLResponse(String rep) throws IOException, URISyntaxException {
+		// Conect to the rep URL
 		URL url = new URI(rep).toURL();
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
+		// Read the HTML and build the response
 		BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 		String inputLine;
 		StringBuilder response = new StringBuilder();
@@ -82,10 +90,14 @@ public class GitScrapingController {
 
 	private JsonObject getHTMLContent(StringBuilder response) throws Exception {
 
+		// Create a first regex to narrow the html content
 		String regex = "<react-partial\\s+partial-name=\"repos-overview\"[^>]*>(.*?)</react-partial>";
+		// Build a pattern with the regex
 		Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
+		// Matches the response with the pattern
 		Matcher matcher = pattern.matcher(response);
 		String firstContent = "";
+		// If the pattern is found, get the content between the tag
 		if (matcher.find()) {
 			firstContent = matcher.group(1);
 
@@ -93,6 +105,7 @@ public class GitScrapingController {
 			throw new Exception("The HTML content could not be retrieved.");
 		}
 
+		// Create a new regex to get only the files information
 		regex = "<script[^>]*>(.*?)</script>";
 		pattern = Pattern.compile(regex, Pattern.DOTALL);
 		matcher = pattern.matcher(firstContent);
@@ -105,6 +118,7 @@ public class GitScrapingController {
 			throw new Exception("The HTML content could not be retrieved.");
 		}
 
+		// With the information I need, I turn it into a json object
 		try {
 			jsonObject = JsonParser.parseString(scriptContent).getAsJsonObject();
 
@@ -114,52 +128,77 @@ public class GitScrapingController {
 		return jsonObject;
 	}
 
-	private void getInfoFiles(JsonObject jsonObject, String git, String type, String fileExtension, List<GitInfo> gitInfos) throws Exception {
+	private void getInfoFiles(JsonObject jsonObject, String git, String type, String fileExtension,
+			List<GitInfo> gitInfos) throws Exception {
+		// This treats the request to the main rep URL
+		// Only the main URL returns the key props
 		if (jsonObject.isJsonObject() && jsonObject.has("props")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("props")
 					.getAsJsonObject("initialPayload")
 					.getAsJsonObject("tree");
+			// Access the files in the rep
+			// This function builds a new URL pointing to a directory or a file, and then
+			// calls the getInfoFiles function again with the new URL informations
 			accessFiles(treeObject, git, gitInfos);
+
+			// If the new URL points to a directory, get the information, and calls the
+			// getInfoFiles function again to access the files into that directory
 		} else if (jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("directory")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
 					.getAsJsonObject("tree");
-			
+
 			accessFiles(treeObject, git, gitInfos);
+
+			// If the new URL points to a file, get the information of that file, and calls
+			// buildGetInfos function to get the information and add it to the response list
 		} else if (jsonObject.isJsonObject() && jsonObject.has("payload") && type.equalsIgnoreCase("file")) {
 			JsonObject treeObject = jsonObject.getAsJsonObject("payload")
 					.getAsJsonObject("blob")
 					.getAsJsonObject("headerInfo");
-			
-			buildGetInfos( treeObject, fileExtension, gitInfos);	
+
+			buildGetInfos(treeObject, fileExtension, gitInfos);
 		}
 	}
 
-	private void accessFiles(JsonObject treeObject, String git, List<GitInfo> gitInfos) throws Exception{
+	private void accessFiles(JsonObject treeObject, String git, List<GitInfo> gitInfos) throws Exception {
 		if (treeObject.isJsonObject() && treeObject.has("items")) {
-			// accessa o array 'items'
+
+			// Access 'items' array
 			JsonArray itemsArray = treeObject.getAsJsonArray("items");
 
-			// Itera sobre os elementos do array
+			// Iterates over the elements of the array.
 			for (int i = 0; i < itemsArray.size(); i++) {
-				// accessa cada item do array como JsonObject
+				// Accesses each item of the array as a JsonObject.
+				// Checks if the item is a directory or a file
 				if (itemsArray.get(i)
 						.getAsJsonObject()
 						.get("contentType")
 						.getAsString()
 						.equalsIgnoreCase("directory")) {
 
+					// Get the path to the directory
 					String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+					// Build de URL
 					String path = git + fileName;
+					// Get the HTML response, that in this call returns a json
 					StringBuilder response = getHTMLResponse(path);
+					// Parse it to a json object
 					JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
+					// Send the information about the directory
 					getInfoFiles(jsonResponse, git, "directory", null, gitInfos);
 
 				} else {
+					// Get the path to the file
 					String fileName = itemsArray.get(i).getAsJsonObject().get("path").getAsString();
+					// Build de URL
 					String path = git + fileName;
+					// Get the HTML response, that in this call returns a json
 					StringBuilder response = getHTMLResponse(path);
+					// Parse it to a json object
 					JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-					getInfoFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1), gitInfos);
+					// Send the information about the file
+					getInfoFiles(jsonResponse, git, "file", fileName.substring(fileName.lastIndexOf('.') + 1),
+							gitInfos);
 				}
 			}
 		} else {
@@ -167,40 +206,46 @@ public class GitScrapingController {
 		}
 	}
 
-	private void buildGetInfos(JsonObject treeObject, String fileExtension, List<GitInfo> gitInfos){
+	private void buildGetInfos(JsonObject treeObject, String fileExtension, List<GitInfo> gitInfos) {
+		// Get the number of lines in the file
 		int lines = 0;
-			if (!(treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").isJsonNull())) {
-				lines = treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").getAsInt();
-			}
-			String size = treeObject.get("blobSize").getAsString();
-			int bytes;
-			if (size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("kb")) {
-				size = size.substring(0, size.lastIndexOf(' '));
-				bytes = Math.round(Float.parseFloat(size) * 1024);
-			} else if (size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("gb")) {
-				size = size.substring(0, size.lastIndexOf(' '));
-				bytes = Math.round(Float.parseFloat(size) * (1024 * 1024 * 1024));
-			} else {
-				size = size.substring(0, size.lastIndexOf(' '));
-				bytes = Integer.parseInt(size);
-			}
+		if (!(treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").isJsonNull())) {
+			lines = treeObject.getAsJsonObject("lineInfo").get("truncatedLoc").getAsInt();
+		}
 
-			boolean extensionExists = false;
-			for (GitInfo existingGitInfo : gitInfos) {
-				if (existingGitInfo.getExtension().equals(fileExtension)) {
-					// Atualizar valores existentes
-					existingGitInfo.setCount(existingGitInfo.getCount() + 1);
-					existingGitInfo.setLines(existingGitInfo.getLines() + lines);
-					existingGitInfo.setBytes(existingGitInfo.getBytes() + bytes);
-					extensionExists = true;
-					break;
-				}
-			}
+		// Get the size of the file in bytes
+		String size = treeObject.get("blobSize").getAsString();
+		int bytes;
+		// Converts kb to bytes
+		if (size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("kb")) {
+			size = size.substring(0, size.lastIndexOf(' '));
+			bytes = Math.round(Float.parseFloat(size) * 1024);
+		// Converts gb to bytes
+		} else if (size.substring(size.lastIndexOf(' ') + 1).equalsIgnoreCase("gb")) {
+			size = size.substring(0, size.lastIndexOf(' '));
+			bytes = Math.round(Float.parseFloat(size) * (1024 * 1024 * 1024));
+		} else {
+			size = size.substring(0, size.lastIndexOf(' '));
+			bytes = Integer.parseInt(size);
+		}
 
-			if (!extensionExists) {
-				GitInfo newGitInfo = new GitInfo(fileExtension, 1, lines, bytes);
-				gitInfos.add(newGitInfo);
+		// Checks if the file extension alredy exists in the list
+		boolean extensionExists = false;
+		for (GitInfo existingGitInfo : gitInfos) {
+			if (existingGitInfo.getExtension().equals(fileExtension)) {
+				// If exists, update the information
+				existingGitInfo.setCount(existingGitInfo.getCount() + 1);
+				existingGitInfo.setLines(existingGitInfo.getLines() + lines);
+				existingGitInfo.setBytes(existingGitInfo.getBytes() + bytes);
+				extensionExists = true;
+				break;
 			}
+		}
+		if (!extensionExists) {
+			// If doesn't exists, create a new git infor object and add it to the list
+			GitInfo newGitInfo = new GitInfo(fileExtension, 1, lines, bytes);
+			gitInfos.add(newGitInfo);
+		}
 
 	}
 }
