@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 import java.util.concurrent.TimeUnit;
+import org.springframework.web.bind.annotation.RequestParam;
+
 
 /**
  * GitScrapingController
@@ -36,6 +38,14 @@ public class GitScrapingController {
 			.maximumSize(10000)
 			.expireAfterWrite(10, TimeUnit.MINUTES)
 			.build();
+
+	@GetMapping("/")
+	public String getMethodName(@RequestParam String param) {
+		System.out.println("teste");
+		String teste = "oi";
+		return  teste;
+	}
+	
 
 	@GetMapping("/git-info")
 	public ResponseEntity<?> get(String rep) {
