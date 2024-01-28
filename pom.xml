@@ -72,6 +72,12 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>3.2.2</version> <!-- Atualize para a versão mais recente -->
+				<configuration>
+					<release>21.0</release> <!-- Certifique-se de que esta versão está correta -->
+					<source>21.0</source> 
+					<target>21.0</target>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
