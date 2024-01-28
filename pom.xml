@@ -77,6 +77,21 @@
 					<release>21</release> <!-- Certifique-se de que esta versão está correta -->
 				</configuration>
         	</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>2.5.5</version> <!-- Use a versão correspondente à sua aplicação -->
+				<configuration>
+					<mainClass>br.com.gitscraping.javagitscraping.JavaGitScrapingApplication</mainClass>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
