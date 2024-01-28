@@ -18,7 +18,7 @@ class JavaGitScrapingApplicationTests {
 	@Test
     public void ApiTest() {
         // Configure a base URI para suas chamadas de API
-        RestAssured.baseURI = "http://localhost:8080";
+        RestAssured.baseURI = determineBaseURI();
 
         // Faça a solicitação HTTP GET para a rota desejada
         Response response = given()
@@ -34,6 +34,10 @@ class JavaGitScrapingApplicationTests {
 		assertTrue(response.getBody().asString().contains("bytes"));
 
 
+    }
+
+    private String determineBaseURI() {
+        return "https://java-scraping-no-api-2464b5478565.herokuapp.com";
     }
 
 }
