@@ -4,8 +4,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.ModelAndView;
-import org.springframework.web.servlet.view.RedirectView;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -14,6 +12,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import br.com.gitscraping.javagitscraping.classes.GitInfo;
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 import java.util.concurrent.TimeUnit;
-import org.springframework.web.bind.annotation.RequestParam;
 
 
 
@@ -43,11 +41,10 @@ public class GitScrapingController {
 			.build();
 
 	@GetMapping("/")
-	public ModelAndView  welcome(@RequestParam String param) {
-		// Redirecting from main page to documentation
-		RedirectView redirectView = new RedirectView("https://github.com/gabrielgcosta/java-scraping-no-api/blob/master/README.md");
-		ModelAndView modelAndView = new ModelAndView(redirectView);
-		return modelAndView;
+	public String  welcome(HttpServletResponse response) throws IOException {
+		String body =
+        "<HTML><body> <a href=\"https://github.com/gabrielgcosta/java-scraping-no-api/blob/master/README.md\">Click here to see documentation</a></body></HTML>";
+		return body;
 	}
 	
 
