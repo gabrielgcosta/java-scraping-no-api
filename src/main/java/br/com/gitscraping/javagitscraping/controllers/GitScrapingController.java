@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.view.RedirectView;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -24,6 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 import java.util.concurrent.TimeUnit;
+import org.springframework.web.bind.annotation.RequestParam;
+
 
 
 /**
@@ -37,6 +41,15 @@ public class GitScrapingController {
 			.maximumSize(10000)
 			.expireAfterWrite(10, TimeUnit.MINUTES)
 			.build();
+
+	@GetMapping("/")
+	public ModelAndView  welcome(@RequestParam String param) {
+		// Redirecting from main page to documentation
+		RedirectView redirectView = new RedirectView("https://github.com/gabrielgcosta/java-scraping-no-api/blob/master/README.md");
+		ModelAndView modelAndView = new ModelAndView(redirectView);
+		return modelAndView;
+	}
+	
 
 	@GetMapping("/git-info")
 	public ResponseEntity<?> get(String rep) {
