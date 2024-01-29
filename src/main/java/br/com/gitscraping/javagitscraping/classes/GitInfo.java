@@ -6,6 +6,7 @@ public class GitInfo {
     private int lines;
     private int bytes;
 
+    // Constructor 
     public GitInfo(String extension, int count, int lines, int bytes){
         this.extension = extension;
         this.count = count;
@@ -14,6 +15,7 @@ public class GitInfo {
 
     }
 
+    //Getters and setters
     public String getExtension() {
         return extension;
     }

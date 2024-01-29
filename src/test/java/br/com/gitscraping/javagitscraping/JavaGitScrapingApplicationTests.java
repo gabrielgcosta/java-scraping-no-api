@@ -17,16 +17,16 @@ class JavaGitScrapingApplicationTests {
 
 	@Test
     public void ApiTest() {
-        // Configure a base URI para suas chamadas de API
+        // Set up the base URI for API calls
         RestAssured.baseURI = determineBaseURI();
 
-        // Faça a solicitação HTTP GET para a rota desejada
+        // Do the HTTP GET request to the needed route
         Response response = given()
                 .param("rep", "gabrielgcosta/botcopa")
                 .when()
                 .get("/git-info");
 
-        // Verifique se o status da resposta é 200
+        // Check if the result is correct
         assertEquals(200, response.getStatusCode());
 		assertTrue(response.getBody().asString().contains("extension"));
 		assertTrue(response.getBody().asString().contains("count"));
